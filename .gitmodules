@@ -5,5 +5,5 @@
 	path = magpie
 	url = https://github.com/yetone/magpie.git
 [submodule "magpie-agent-cursor-bridge"]
-	path = magpie-agent-cursor-bridge
+	path = plugins/magpie-agent-cursor-bridge
 	url = https://github.com/flylink-code/magpie-agent-cursor-bridge.git

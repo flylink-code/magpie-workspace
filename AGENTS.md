@@ -7,7 +7,7 @@
 ### 1.1 克服 GPT 模型保守倾向（主动、果断、完整交付）
 
 1. **拒绝纸上谈兵与半成品**：面对开发或排障任务，直接通过代码地图与源码定位问题、完成真实代码修改并运行验证，禁止只给口头思路、伪代码或停留在表层分析。
-2. **自主求证，减少无效追问**：凡是能通过查阅 `doc/CODE_MAP_INDEX.md`、阅读 `magpie/` 与 `magpie-agent-cursor-bridge/` 源码、或运行单元测试确认的事实，必须自主求证并做出符合工程最佳实践的决策，不要把确定性问题抛回给用户。
+2. **自主求证，减少无效追问**：凡是能通过查阅 `doc/CODE_MAP_INDEX.md`、阅读 `magpie/` 与 `plugins/magpie-agent-cursor-bridge/` 源码、或运行单元测试确认的事实，必须自主求证并做出符合工程最佳实践的决策，不要把确定性问题抛回给用户。
 3. **果断演进，不留腐化包袱**：当确认原有实现逻辑有误或状态机设计存在漏洞时，果断在模块职责内修正核心实现，不要因为“怕改坏”而保留错误旧分支、无用死代码或层层包裹的兼容壳。
 4. **禁止过度防御性编程**：
    - 只在真实的系统边界（跨进程 IO、外部 JSON/JSONC 解析、网络超时、操作系统平台差异）做精准错误处理。
@@ -40,7 +40,7 @@
 | 目录 / 文件 | 说明 | 权限约束 |
 | --- | --- | --- |
 | `magpie/` | Magpie 官方软件源码（Go 宿主 + 本地大模型网关 + 桌面 GUI + 插件运行时） | **只读：只能查看代码与参考实现，严禁进行任何修改、写入或格式化** |
-| `magpie-agent-cursor-bridge/` | 我 Fork 的 Cursor · Magpie 协议桥接插件（Node.js + 原生引擎补丁 `source.patch`） | **允许修改：主开发目录** |
+| `plugins/magpie-agent-cursor-bridge/` | 我 Fork 的 Cursor · Magpie 协议桥接插件（Node.js + 原生引擎补丁 `source.patch`） | **允许修改：主开发目录** |
 | `doc/` | 工作区文档、代码地图生成器与索引页（`doc/codemap.mjs`、`doc/CODE_MAP_INDEX.md`、`doc/codemap/` 等） | **允许修改：`doc/CODE_MAP_INDEX.md` 与 `doc/codemap/` 仅允许由 `node doc/codemap.mjs` 自动生成，严禁手改** |
 
 ---
@@ -73,12 +73,12 @@
 
 ```text
 Magpie 宿主 (magpie/, Go, 本地网关默认 127.0.0.1:3425)
-  ├─ internal/agentplug/agentplug.go (moejs 沙箱) 加载 magpie-agent-cursor-bridge/agent.js
+  ├─ internal/agentplug/agentplug.go (moejs 沙箱) 加载 plugins/magpie-agent-cursor-bridge/agent.js
   ├─ 调用 connect({ gateway, model, models }) 获取配置并写入 ~/.config/magpie-cursor-bridge/connection.json
   └─ 在缓存目录写出 agents-state.json（记录 cursor-bridge 的 wired 状态）
                                 │
                                 ▼
-Cursor Bridge 后台守护 (magpie-agent-cursor-bridge/bridge.js supervise + watch)
+Cursor Bridge 后台守护 (plugins/magpie-agent-cursor-bridge/bridge.js supervise + watch)
   ├─ 进程锁防重入 (lib/lock.js)：记录 PID + 进程启动时间 (owner.json)，防止 Windows PID 复用导致假死锁
   ├─ 状态联动 (lib/magpie.js)：监控 Magpie agents-state.json，检测开关由 on -> off 时自动停机并还原代理
   ├─ 目录热同步 (lib/config.js)：校验 connection.json（仅限本地回环 HTTP），每 4s 拉取 Magpie /v1/models 写出 effective.json
@@ -95,20 +95,20 @@ Cursor 编辑器 ──[HTTP/TLS 回环代理 127.0.0.1:52407]──> cursor-mag
 
 | 模块 | 路径 | 核心职责与关键约束 |
 | --- | --- | --- |
-| `bridge-root` | `magpie-agent-cursor-bridge/agent.js` | Magpie Agent 插件入口（导出 `agent` 与 `connect`）。在 Magpie 内置 `moejs` 中运行（Node 内置模块必须异步按需动态 `import('node:...')`，确保无 Node 环境仍能返回配置对象）。负责比对 `status.json` 与 `installation.json` 版本，按需触发 `install.js setup` 或直接拉起 `bridge.js supervise`。 |
-| `bridge-root` | `magpie-agent-cursor-bridge/bridge.js` | 后台 Supervisor (`supervise`)、Watchdog (`watch`)、状态查询 (`status`)、配置还原 (`restore`)。管理原生引擎子进程生命周期、信号退出与 `uncaughtException` 紧急还原 (`panic`)。 |
-| `bridge-root` | `magpie-agent-cursor-bridge/install.js` | CLI 安装/状态/卸载入口（`setup` \| `status` \| `uninstall` \| `--version`）。支持 `CURSOR_BRIDGE_ROOT` 环境变量用于测试沙箱隔离。 |
-| `bridge-root` | `magpie-agent-cursor-bridge/source.patch` | 针对 `cursor-byok` (`v1.0.1`) 的 Rust 补丁：新增 `bin/cursor-magpie-bridge.rs` 无头引擎、强制 `CURSOR_BYOK_DATA_DIR` 隔离、开启 `LocalCatalogOnly` 仅返回 Magpie 模型目录、通过 Protobuf `display_configuration` 隐藏 Cursor 默认 Auto 按钮、监听父进程 stdin EOF 自动退出防孤儿进程。 |
-| `bridge-root` | `magpie-agent-cursor-bridge/setup.{ps1,cmd,command}` | Windows / macOS 一键初始化与证书信任包装脚本（优先复用本机 Node 或 Magpie 自带 `magpie-bun`）。 |
-| `bridge-lib` | `magpie-agent-cursor-bridge/lib/install.js` | 校验发布包与二进制哈希（`integrity.json`）、初始化并引导信任本机 CA 证书（Windows `certutil -addstore -f Root` / macOS `security add-trusted-cert`）、向 `~/.local/share/magpie-cursor-bridge/releases/<ver>-*` 暂存不可变发布副本、注册 Windows `Startup/*.vbs` 或 macOS `LaunchAgents/*.plist`。 |
-| `bridge-lib` | `magpie-agent-cursor-bridge/lib/settings.js` | 原子文件写入（`atomic`，含 Windows `EPERM`/`EACCES` 退避重试）、Cursor `settings.json` 6 项代理配置注入（`applyProxy`）、基于 `settings-journal.json` 的精确回滚（`restoreProxy`）以及无日志残留代理清理（`clearStaleProxy`）。 |
-| `bridge-lib` | `magpie-agent-cursor-bridge/lib/relay.js` | 固定端口（默认 `52407`）到引擎动态端口的本地 TCP 中继（`createRelay`、`listenFixed`），消除引擎重启引起的代理端口漂移。 |
-| `bridge-lib` | `magpie-agent-cursor-bridge/lib/lock.js` | `claim` / `held` / `release` 排他锁，通过 PowerShell `Get-Process`（Windows）或 `ps -o lstart=`（macOS/Linux）比对进程启动时间防止 PID 复用误判。 |
-| `bridge-lib` | `magpie-agent-cursor-bridge/lib/magpie.js` | 探测 Magpie 的 `agents-state.json`，通过 `nextMagpieGate` 区分“用户主动关闭开关”与“Magpie 重启初期未写入 `wired`”。 |
-| `bridge-lib` | `magpie-agent-cursor-bridge/lib/config.js` | `validate` 校验网关地址必须为本地回环 HTTP 且所选模型在目录中；`gatewayModels` 请求 `<gateway>/models` 同步模型与上下文窗口。 |
-| `bridge-lib` | `magpie-agent-cursor-bridge/lib/watch.js` | `shouldRevive(status, now, limit)` 判定是否需要由 Watchdog 重新拉起意外退出的 Supervisor。 |
-| `bridge-scripts` | `magpie-agent-cursor-bridge/scripts/build-native.sh` | 拉取固定 commit 的 `cursor-byok`、应用 `source.patch`、编译 `cursor-magpie-bridge` 并更新 `integrity.json`。 |
-| `bridge-test` | `magpie-agent-cursor-bridge/test/*.test.js` | 覆盖 `agent`、`config`、`install`、`lock`、`magpie`、`relay`、`settings`、`settings-change`、`watch` 及生命周期测试。 |
+| `bridge-root` | `plugins/magpie-agent-cursor-bridge/agent.js` | Magpie Agent 插件入口（导出 `agent` 与 `connect`）。在 Magpie 内置 `moejs` 中运行（Node 内置模块必须异步按需动态 `import('node:...')`，确保无 Node 环境仍能返回配置对象）。负责比对 `status.json` 与 `installation.json` 版本，按需触发 `install.js setup` 或直接拉起 `bridge.js supervise`。 |
+| `bridge-root` | `plugins/magpie-agent-cursor-bridge/bridge.js` | 后台 Supervisor (`supervise`)、Watchdog (`watch`)、状态查询 (`status`)、配置还原 (`restore`)。管理原生引擎子进程生命周期、信号退出与 `uncaughtException` 紧急还原 (`panic`)。 |
+| `bridge-root` | `plugins/magpie-agent-cursor-bridge/install.js` | CLI 安装/状态/卸载入口（`setup` \| `status` \| `uninstall` \| `--version`）。支持 `CURSOR_BRIDGE_ROOT` 环境变量用于测试沙箱隔离。 |
+| `bridge-root` | `plugins/magpie-agent-cursor-bridge/source.patch` | 针对 `cursor-byok` (`v1.0.1`) 的 Rust 补丁：新增 `bin/cursor-magpie-bridge.rs` 无头引擎、强制 `CURSOR_BYOK_DATA_DIR` 隔离、开启 `LocalCatalogOnly` 仅返回 Magpie 模型目录、通过 Protobuf `display_configuration` 隐藏 Cursor 默认 Auto 按钮、监听父进程 stdin EOF 自动退出防孤儿进程。 |
+| `bridge-root` | `plugins/magpie-agent-cursor-bridge/setup.{ps1,cmd,command}` | Windows / macOS 一键初始化与证书信任包装脚本（优先复用本机 Node 或 Magpie 自带 `magpie-bun`）。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/install.js` | 校验发布包与二进制哈希（`integrity.json`）、初始化并引导信任本机 CA 证书（Windows `certutil -addstore -f Root` / macOS `security add-trusted-cert`）、向 `~/.local/share/magpie-cursor-bridge/releases/<ver>-*` 暂存不可变发布副本、注册 Windows `Startup/*.vbs` 或 macOS `LaunchAgents/*.plist`。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/settings.js` | 原子文件写入（`atomic`，含 Windows `EPERM`/`EACCES` 退避重试）、Cursor `settings.json` 6 项代理配置注入（`applyProxy`）、基于 `settings-journal.json` 的精确回滚（`restoreProxy`）以及无日志残留代理清理（`clearStaleProxy`）。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/relay.js` | 固定端口（默认 `52407`）到引擎动态端口的本地 TCP 中继（`createRelay`、`listenFixed`），消除引擎重启引起的代理端口漂移。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/lock.js` | `claim` / `held` / `release` 排他锁，通过 PowerShell `Get-Process`（Windows）或 `ps -o lstart=`（macOS/Linux）比对进程启动时间防止 PID 复用误判。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/magpie.js` | 探测 Magpie 的 `agents-state.json`，通过 `nextMagpieGate` 区分“用户主动关闭开关”与“Magpie 重启初期未写入 `wired`”。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/config.js` | `validate` 校验网关地址必须为本地回环 HTTP 且所选模型在目录中；`gatewayModels` 请求 `<gateway>/models` 同步模型与上下文窗口。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/watch.js` | `shouldRevive(status, now, limit)` 判定是否需要由 Watchdog 重新拉起意外退出的 Supervisor。 |
+| `bridge-scripts` | `plugins/magpie-agent-cursor-bridge/scripts/build-native.sh` | 拉取固定 commit 的 `cursor-byok`、应用 `source.patch`、编译 `cursor-magpie-bridge` 并更新 `integrity.json`。 |
+| `bridge-test` | `plugins/magpie-agent-cursor-bridge/test/*.test.js` | 覆盖 `agent`、`config`、`install`、`lock`、`magpie`、`relay`、`settings`、`settings-change`、`watch` 及生命周期测试。 |
 
 ### 4.3 `magpie`（只读参考）关键协同模块
 
@@ -144,10 +144,10 @@ Cursor 编辑器 ──[HTTP/TLS 回环代理 127.0.0.1:52407]──> cursor-mag
 
 ```powershell
 # 1. 运行 magpie-agent-cursor-bridge 全部单元测试
-node --test magpie-agent-cursor-bridge/test/*.test.js
+node --test plugins/magpie-agent-cursor-bridge/test/*.test.js
 
 # 2. 运行单个测试文件（按需最小化验证）
-node --test magpie-agent-cursor-bridge/test/settings.test.js
+node --test plugins/magpie-agent-cursor-bridge/test/settings.test.js
 
 # 3. 刷新并校验代码地图（每次修改代码或文档后必跑）
 node doc/codemap.mjs
@@ -161,5 +161,5 @@ node --test doc/codemap.test.mjs
 
 1. [ ] 问题根因已查清，代码修改是**根治性方案**而非外围补丁，未引入过度防御代码。
 2. [ ] `git -C magpie status` 保持完全干净（确认未修改 `magpie/` 下任何只读文件）。
-3. [ ] `node --test magpie-agent-cursor-bridge/test/*.test.js` 全部单元测试通过。
+3. [ ] `node --test plugins/magpie-agent-cursor-bridge/test/*.test.js` 全部单元测试通过。
 4. [ ] `node doc/codemap.mjs` 与 `node doc/codemap.mjs --check` 执行通过（零漂移、`diagnostics: 0`）。
