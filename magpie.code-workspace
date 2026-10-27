@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"claudeHub.todoTools.enabled": true,
+		"git.autoRepositoryDetection": true,
+		"git.repositoryScanMaxDepth": 2
+	}
+}

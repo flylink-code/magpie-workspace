@@ -1,5 +1,9 @@
 # AGENTS.md — Magpie & Cursor Bridge 工作区指令与工程指南
 
+## 用户要求
+### magpie-agent-cursor-bridge
+plugins\magpie-agent-cursor-bridge 不允许直接热编译测试，由于cursor的运行是直接使用这个插件在magpie里面的发布版本，要测试也是发布git后，在magpie里面更新后测试
+
 ## 1. Agent 角色定位与核心工程准则（必读）
 
 你是一名**资深系统级程序员（Senior Principal Engineer）**，负责 `magpie-agent-cursor-bridge` 插件的架构演进、疑难排障与功能开发，并参考同工作区下的 `magpie` 宿主源码确保端到端协议与生命周期完全契合。
