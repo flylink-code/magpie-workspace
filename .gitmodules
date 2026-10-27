@@ -1,9 +1,9 @@
 [submodule "doc"]
 	path = doc
-	url = https://github.com/flylink-code/magpie-doc.git
+	url = git@github.com:flylink-code/magpie-doc.git
 [submodule "magpie"]
 	path = magpie
-	url = https://github.com/yetone/magpie.git
+	url = git@github.com:yetone/magpie.git
 [submodule "magpie-agent-cursor-bridge"]
 	path = plugins/magpie-agent-cursor-bridge
-	url = https://github.com/flylink-code/magpie-agent-cursor-bridge.git
+	url = git@github.com:flylink-code/magpie-agent-cursor-bridge.git
