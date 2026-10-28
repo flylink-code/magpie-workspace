@@ -51,9 +51,9 @@ plugins\magpie-agent-cursor-bridge 不允许直接热编译测试，由于cursor
 
 ## 3. 代码地图规范（所有代码任务必须遵守）
 
-为避免在包含 1100+ 源码文件的工作区中全仓盲扫，所有代码定位与修改必须遵循三层代码地图导航：
+为避免在包含 1100+ 源码文件的工作区中全仓盲扫，所有代码定位与修改必须遵循代码地图导航：
 
-`AGENTS.md` → [doc/CODE_MAP_INDEX.md](doc/CODE_MAP_INDEX.md) → `doc/codemap/<模块>.md` → `doc/codemap/<文件符号页>.md` → 源码 `#L行号`
+`AGENTS.md` → [doc/CODE_MAP_INDEX.md](doc/CODE_MAP_INDEX.md) →（跨模块找入口时先看 `doc/codemap/hubs.md`）→ `doc/codemap/<模块>.md` → `doc/codemap/<文件符号页>.md` → 源码 `#L行号`
 
 - **使用教程与模块速查**：见 [doc/codemap-guide.md](doc/codemap-guide.md)
 - **生成器设计与覆盖说明**：见 [doc/CODE_MAP.md](doc/CODE_MAP.md)
@@ -61,13 +61,13 @@ plugins\magpie-agent-cursor-bridge 不允许直接热编译测试，由于cursor
 ### 必须遵守的流程
 
 1. **先查地图再读码**：先读 [doc/CODE_MAP_INDEX.md](doc/CODE_MAP_INDEX.md) 选择目标模块（`bridge-*` 为可修改插件，`magpie-*` 为只读宿主参考）→ 打开模块页找到文件 → 打开符号页定位函数/结构体/方法的精确行号 → 定点读取源码片段。
-2. **需要语义引用时配合工具**：代码地图提供静态声明导航；追踪跨文件调用链或引用关系时，结合 `grep` / `usages` 工具精确定位。
+2. **需要语义引用时配合工具**：代码地图提供静态声明导航；只知道符号名时用 `node doc/codemap.mjs --find <名字>`，看单文件全部声明用 `--outline <文件>`；追踪跨文件调用链或引用关系时，结合 `grep` / `usages` 工具精确定位（枢纽页只统计 JS/TS 与 Rust 的 import 边，Go 不在其中）。
 3. **修改后必须刷新并校验地图**：任何文件新增、修改、删除或重命名后，必须在工作区根目录（`e:\W-AI_WorkSpace\magpie`）执行：
    ```powershell
    node doc/codemap.mjs
    node doc/codemap.mjs --check
    ```
-   确保 `changed: 0`、`diagnostics: 0`；严禁手工编辑 `doc/CODE_MAP_INDEX.md` 或 `doc/codemap/` 下的生成文件。
+   确保 `changed: 0`、`deleted: 0`，解析诊断保持已知基线 10 条（Go 泛型实例化的语法快照缺口，见 `doc/CODE_MAP.md`）；严禁手工编辑 `doc/CODE_MAP_INDEX.md` 或 `doc/codemap/` 下的生成文件。
 
 ---
 
@@ -99,7 +99,8 @@ Cursor 编辑器 ──[HTTP/TLS 回环代理 127.0.0.1:52407]──> cursor-mag
 
 | 模块 | 路径 | 核心职责与关键约束 |
 | --- | --- | --- |
-| `bridge-root` | `plugins/magpie-agent-cursor-bridge/agent.js` | Magpie Agent 插件入口（导出 `agent` 与 `connect`）。在 Magpie 内置 `moejs` 中运行（Node 内置模块必须异步按需动态 `import('node:...')`，确保无 Node 环境仍能返回配置对象）。负责比对 `status.json` 与 `installation.json` 版本，按需触发 `install.js setup` 或直接拉起 `bridge.js supervise`。 |
+| `bridge-root` | `plugins/magpie-agent-cursor-bridge/agent.js` | Magpie Agent 插件入口（导出 `agent` 描述与 `connect`）。在 Magpie 内置 `moejs` 中运行：**没有 `process`、没有定时器、不能 `import` 任何内置模块**，所以这里只负责「返回要写入 `connection.json` 的配置」；在 `connect()` 里启动进程会直接抛 `ReferenceError`，安装/升级一律交给 `setup.ps1`（`install.js setup`）。 |
+| `bridge-lib` | `plugins/magpie-agent-cursor-bridge/lib/upgrade.js` | `sourceUpdate(root, running)`：比较 `installation.json` 记录的插件源版本与当前发布版本，供 Supervisor 发现「插件已在 Magpie 里更新」，并调用该插件的 `install.js setup` 完成暂存与重启。 |
 | `bridge-root` | `plugins/magpie-agent-cursor-bridge/bridge.js` | 后台 Supervisor (`supervise`)、Watchdog (`watch`)、状态查询 (`status`)、配置还原 (`restore`)。管理原生引擎子进程生命周期、信号退出与 `uncaughtException` 紧急还原 (`panic`)。 |
 | `bridge-root` | `plugins/magpie-agent-cursor-bridge/install.js` | CLI 安装/状态/卸载入口（`setup` \| `status` \| `uninstall` \| `--version`）。支持 `CURSOR_BRIDGE_ROOT` 环境变量用于测试沙箱隔离。 |
 | `bridge-root` | `plugins/magpie-agent-cursor-bridge/source.patch` | 针对 `cursor-byok` (`v1.0.1`) 的 Rust 补丁：新增 `bin/cursor-magpie-bridge.rs` 无头引擎、强制 `CURSOR_BYOK_DATA_DIR` 隔离、开启 `LocalCatalogOnly` 仅返回 Magpie 模型目录、通过 Protobuf `display_configuration` 隐藏 Cursor 默认 Auto 按钮、监听父进程 stdin EOF 自动退出防孤儿进程。 |
@@ -129,8 +130,8 @@ Cursor 编辑器 ──[HTTP/TLS 回环代理 127.0.0.1:52407]──> cursor-mag
 ## 5. 关键硬约束与防踩坑指南
 
 1. **`agent.js` 必须兼容 `moejs` 沙箱**：
-   - Magpie 宿主使用 Go 内置的 `moejs` 执行 `agent.js` 的模块顶层代码与同步 `connect()` 返回值，**没有完整的 Node.js 全局环境**。
-   - 因此 `agent.js` 顶层绝不能静态 `import 'node:fs'` 等 Node 内置模块；所有自启逻辑必须在异步微任务中动态 `await import('node:...')`，且任何异常都不得阻塞或弄挂 `connect()` 的同步返回。
+   - Magpie 宿主用 Go 内置的 `moejs` 执行 `agent.js` 的模块顶层代码与同步 `connect()` 返回值，**没有 `process`、没有定时器，也不能 `import('node:...')`**。
+   - 因此 `agent.js` 只能是「数据 + `connect()` 返回值」：不读环境变量、不起进程、不做副作用；否则 `connect()` 会抛异常，Magpie 侧显示 `connect: ReferenceError: ...` 并且配置写不进去。安装、升级与后台进程生命周期由 `setup.ps1`（`install.js setup`）和 Supervisor/Watchdog 负责。
 2. **测试必须严格沙箱隔离，严禁污染宿主机真实环境**：
    - 运行或编写测试时，必须通过 `CURSOR_BRIDGE_ROOT`、`CURSOR_BRIDGE_SETTINGS`、临时 `home` 目录隔离文件写入。
    - 严禁在测试中改写本机真实的 `~/.config/magpie-cursor-bridge`、真实的 Cursor `User/settings.json` 或真实的 Windows `Startup` 自启脚本。
@@ -157,7 +158,11 @@ node --test plugins/magpie-agent-cursor-bridge/test/settings.test.js
 node doc/codemap.mjs
 node doc/codemap.mjs --check
 
-# 4. 运行代码地图生成器自测
+# 4. 按符号名 / 单文件查地图（只读，不写文件）
+node doc/codemap.mjs --find nextMagpieGate
+node doc/codemap.mjs --outline plugins/magpie-agent-cursor-bridge/bridge.js
+
+# 5. 运行代码地图生成器自测
 node --test doc/codemap.test.mjs
 ```
 
@@ -166,4 +171,4 @@ node --test doc/codemap.test.mjs
 1. [ ] 问题根因已查清，代码修改是**根治性方案**而非外围补丁，未引入过度防御代码。
 2. [ ] `git -C magpie status` 保持完全干净（确认未修改 `magpie/` 下任何只读文件）。
 3. [ ] `node --test plugins/magpie-agent-cursor-bridge/test/*.test.js` 全部单元测试通过。
-4. [ ] `node doc/codemap.mjs` 与 `node doc/codemap.mjs --check` 执行通过（零漂移、`diagnostics: 0`）。
+4. [ ] `node doc/codemap.mjs` 与 `node doc/codemap.mjs --check` 执行通过（零漂移，解析诊断维持已知基线 10 条）。
