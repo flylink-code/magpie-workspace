@@ -3,6 +3,21 @@
 ## 用户要求
 ### magpie-agent-cursor-bridge
 plugins\magpie-agent-cursor-bridge 不允许直接热编译测试，由于cursor的运行是直接使用这个插件在magpie里面的发布版本，要测试也是发布git后，在magpie里面更新后测试
+### git
+默认使用 SSH 方式。
+
+### magpie-agent-cursor-bridge 的上游与 Fork 关系
+- **源工程（上游）**：`932633145/magpie-agent-cursor-bridge`，目标分支为 `main`。
+- **维护 Fork**：`flylink-code/magpie-agent-cursor-bridge`，工作分支为 `main`。
+- `flylink-code` 是从 `932633145` Fork 出来的，二者方向不能颠倒。
+- 插件修改必须先提交并推送到 Fork：
+  `git@github.com:flylink-code/magpie-agent-cursor-bridge.git`。
+- 发布后必须从 `flylink-code:main` 向 `932633145:main` 创建 Pull Request；禁止把 Fork 的提交直接推送到源工程。
+- 推荐使用以下语义命名：`origin` 指向 Fork，`upstream` 指向源工程。即：
+  - `origin`：`git@github.com:flylink-code/magpie-agent-cursor-bridge.git`
+  - `upstream`：`git@github.com:932633145/magpie-agent-cursor-bridge.git`
+- Pull Request 方向固定为：`flylink-code:main` → `932633145:main`。
+- 主工作区 `magpie-workspace` 使用 SSH 远程：`git@github.com:flylink-code/magpie-workspace.git`；`.gitmodules` 中的子仓库地址也必须保持 SSH。
 
 ## 1. Agent 角色定位与核心工程准则（必读）
 
