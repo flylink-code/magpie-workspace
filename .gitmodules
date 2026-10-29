@@ -7,3 +7,6 @@
 [submodule "magpie-agent-cursor-bridge"]
 	path = plugins/magpie-agent-cursor-bridge
 	url = git@github.com:flylink-code/magpie-agent-cursor-bridge.git
+[submodule "magpie-community-plugins"]
+	path = plugins/magpie-community-plugins
+	url = git@github.com:magpie-community/plugins.git
